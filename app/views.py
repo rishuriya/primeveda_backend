@@ -226,9 +226,8 @@ def generate_story(request, prompt_text):
         title.result=(title.result).replace('**','')
         new_story = Story(prompt=prompt_text, title=title.result, story=generated_story, user=request.user)
         new_story.publish()
-        results = Story.objects.filter(prompt__icontains=prompt_text)
-        serializer = StorySerializer(results)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response({"story": generated_story,"title":title.result}, status=status.HTTP_200_OK)
+    
     except Exception as e:
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
