@@ -1,3 +1,5 @@
 djangorestframework
 python-decouple
 google-generativeai
+spacy
+scikit-learn

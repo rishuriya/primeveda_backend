@@ -20,13 +20,19 @@ from .serializers import (
     UserRegistrationSerializer,
     UserSignInSerializer,
     PromptSerializer,
+    StorySerializer
 )
 from django.conf import settings
 import google.generativeai as google_palm
 from django.middleware.csrf import get_token
 from .serializers import UserSerializer
-from rest_framework.generics import RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
+from django.db.models import Q
+
+import spacy
+from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -116,53 +122,143 @@ def sign_in(request):
             )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+nlp = spacy.load("en_core_web_md")
+
 @api_view(["POST"])
-@login_required(login_url='sign-in/')
+@permission_classes([IsAuthenticated])
+def SearchAPIView(request):
+    serializer = PromptSerializer(data=request.data)
+    if serializer.is_valid():
+        try:
+            search_query = serializer.validated_data["prompt"]
+            
+            # Preprocess user query
+            user_query_vec = nlp(search_query).vector
+
+            # Fetch all prompts from the database
+            prompts = Story.objects.values_list("prompt", flat=True)
+
+            # Calculate similarity between user query and each prompt
+            similarities = []
+
+            for prompt in prompts:
+                prompt_vec = nlp(prompt).vector
+                similarity = cosine_similarity([user_query_vec], [prompt_vec])[0][0]
+                similarities.append(similarity)
+
+            # Define a similarity threshold
+            threshold = 0.9
+            print(similarities)
+            # Filter prompts that are semantically similar to the user query
+            similar_prompts = [prompt for prompt, similarity in zip(prompts, similarities) if similarity > threshold]
+
+            # If similar prompts are found, return them
+            if similar_prompts:
+                results = Story.objects.filter(prompt__in=similar_prompts)
+                serializer = StorySerializer(results, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+            generated_story_response = generate_story(request, search_query)
+            return generated_story_response
+
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "User is not logged in."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+        except Exception as e:
+            return Response(
+                {"detail": "An error occurred.","error":str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
 def GenerateStoryView(request):
     serializer = PromptSerializer(data=request.data)
     print(request.data)
     if serializer.is_valid():
-        prompt = "generate a story based on indian ancient text on context "+serializer.validated_data["prompt"]
         try:
-            google_palm.configure(api_key=settings.GOOGLE_API_KEY)
-
-            defaults = {
-                "model": "models/text-bison-001",
-                "temperature": 0.7,
-                "candidate_count": 1,
-                "top_k": 40,
-                "top_p": 0.95,
-                "max_output_tokens": 1024,
-                "stop_sequences": [],
-                "safety_settings": [
-                    {"category": "HARM_CATEGORY_DEROGATORY", "threshold": 1},
-                    {"category": "HARM_CATEGORY_TOXICITY", "threshold": 1},
-                    {"category": "HARM_CATEGORY_VIOLENCE", "threshold": 2},
-                    {"category": "HARM_CATEGORY_SEXUAL", "threshold": 2},
-                    {"category": "HARM_CATEGORY_MEDICAL", "threshold": 2},
-                    {"category": "HARM_CATEGORY_DANGEROUS", "threshold": 2},
-                ],
-            }
-
-            response = google_palm.generate_text(**defaults, prompt=prompt)
-            generated_story = response.result
-            title_prompt="Generate title of the give story \n"+generated_story
-            title=google_palm.generate_text(**defaults, prompt=title_prompt)
-
-            new_story = Story(prompt=serializer.validated_data["prompt"], title=title.result, story=generated_story)
-            new_story.publish()
-            return Response({"story": generated_story,"title":title.result}, status=status.HTTP_200_OK)
-
+            generated_story_response = generate_story(request, serializer.validated_data["prompt"])
+            return generated_story_response
+        except User.DoesNotExist:
+            return Response(
+                {"detail": "User is not logged in."},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         except Exception as e:
             return Response(
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(["GET"])
-@login_required(login_url='sign-in/')
+@permission_classes([IsAuthenticated]) 
 def CurrentUserDetailView(request):
-    serializer=UserSerializer(request.user)
-    print(serializer.data)
-    return Response(serializer.data)
+    try:
+        serializer = UserSerializer(request.user)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except User.DoesNotExist:
+        # Handle the case where the user does not exist (not logged in)
+        return Response(
+            {"detail": "User is not logged in."},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+    except Exception as e:
+        # Handle other exceptions
+        return Response(
+            {"detail": "An error occurred."},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+    
+def generate_story(request, prompt_text):
+    try:
+        google_palm.configure(api_key=settings.GOOGLE_API_KEY)
+        prompt = "generate a story based on indian ancient text on context " + prompt_text
+        defaults = {
+            "model": "models/text-bison-001",
+            "temperature": 0.7,
+            "candidate_count": 1,
+            "top_k": 40,
+            "top_p": 0.95,
+            "max_output_tokens": 1024,
+            "stop_sequences": [],
+            "safety_settings": [
+                {"category": "HARM_CATEGORY_DEROGATORY", "threshold": 1},
+                {"category": "HARM_CATEGORY_TOXICITY", "threshold": 1},
+                {"category": "HARM_CATEGORY_VIOLENCE", "threshold": 2},
+                {"category": "HARM_CATEGORY_SEXUAL", "threshold": 2},
+                {"category": "HARM_CATEGORY_MEDICAL", "threshold": 2},
+                {"category": "HARM_CATEGORY_DANGEROUS", "threshold": 2},
+            ],
+        }
+
+        response = google_palm.generate_text(**defaults, prompt=prompt)
+        generated_story = response.result
+        title_prompt="Generate title of the give story "+generated_story
+        title=google_palm.generate_text(**defaults, prompt=title_prompt)
+        title.result=(title.result).replace('**','')
+        new_story = Story(prompt=prompt_text, title=title.result, story=generated_story, user=request.user)
+        new_story.publish()
+        results = Story.objects.filter(prompt__icontains=prompt_text)
+        serializer = StorySerializer(results)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    except Exception as e:
+            return Response(
+                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+@api_view(['PUT'])  # Use PUT method to update the profile
+@permission_classes([IsAuthenticated])
+def update_profile(request):
+    user = request.user  # Get the current logged-in user
+
+    # Check if the request data is valid based on the serializer
+    serializer = UserSerializer(user, data=request.data, partial=True)  # Use partial=True to allow partial updates
+    if serializer.is_valid():
+        serializer.save()  # Save the updated profile data
+        return Response(serializer.data, status=200)
+
+    return Response(serializer.errors, status=400)
