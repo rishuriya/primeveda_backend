@@ -3,3 +3,4 @@ python-decouple
 google-generativeai
 spacy
 scikit-learn
+django-cors-headers 
