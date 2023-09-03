@@ -4,8 +4,6 @@ from django.utils.encoding import force_str, force_bytes
 from django.contrib.sites.shortcuts import get_current_site
 from django.urls import reverse
 from django.contrib.auth import login, authenticate
-from django.contrib.auth.decorators import login_required
-from django.shortcuts import render, redirect
 from django.core.mail import send_mail
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
@@ -27,12 +25,8 @@ import google.generativeai as google_palm
 from django.middleware.csrf import get_token
 from .serializers import UserSerializer
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
-from django.db.models import Q
-
 import spacy
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -131,14 +125,9 @@ def SearchAPIView(request):
     if serializer.is_valid():
         try:
             search_query = serializer.validated_data["prompt"]
-            
-            # Preprocess user query
             user_query_vec = nlp(search_query).vector
-
-            # Fetch all prompts from the database
             prompts = Story.objects.values_list("prompt", flat=True)
 
-            # Calculate similarity between user query and each prompt
             similarities = []
 
             for prompt in prompts:
@@ -146,13 +135,10 @@ def SearchAPIView(request):
                 similarity = cosine_similarity([user_query_vec], [prompt_vec])[0][0]
                 similarities.append(similarity)
 
-            # Define a similarity threshold
             threshold = 0.9
             print(similarities)
-            # Filter prompts that are semantically similar to the user query
             similar_prompts = [prompt for prompt, similarity in zip(prompts, similarities) if similarity > threshold]
 
-            # If similar prompts are found, return them
             if similar_prompts:
                 results = Story.objects.filter(prompt__in=similar_prompts)
                 serializer = StorySerializer(results, many=True)
@@ -201,13 +187,11 @@ def CurrentUserDetailView(request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except User.DoesNotExist:
-        # Handle the case where the user does not exist (not logged in)
         return Response(
             {"detail": "User is not logged in."},
             status=status.HTTP_401_UNAUTHORIZED
         )
     except Exception as e:
-        # Handle other exceptions
         return Response(
             {"detail": "An error occurred."},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -250,15 +234,12 @@ def generate_story(request, prompt_text):
                 {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
-@api_view(['PUT'])  # Use PUT method to update the profile
+@api_view(['PUT']) 
 @permission_classes([IsAuthenticated])
 def update_profile(request):
-    user = request.user  # Get the current logged-in user
-
-    # Check if the request data is valid based on the serializer
-    serializer = UserSerializer(user, data=request.data, partial=True)  # Use partial=True to allow partial updates
+    user = request.user
+    serializer = UserSerializer(user, data=request.data, partial=True)
     if serializer.is_valid():
-        serializer.save()  # Save the updated profile data
+        serializer.save()
         return Response(serializer.data, status=200)
-
     return Response(serializer.errors, status=400)
