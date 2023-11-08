@@ -11,4 +11,5 @@ urlpatterns = [
     path('current-user/', views.CurrentUserDetailView, name='current-user-detail'),
     path('search/', views.SearchAPIView, name='search-api'),
     path('update-profile/', views.update_profile, name='update-profile'),
+    path('getStory/', views.get_story, name='Get_top_fifty')
 ]

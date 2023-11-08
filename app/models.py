@@ -17,6 +17,7 @@ class Story(models.Model):
     title=models.CharField(max_length=200)
     story=models.TextField()
     creation_date = models.DateTimeField(blank=True, null=True)
+    reference_book = models.CharField(max_length=200, null= True)
     user=models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
 
     def publish(self):

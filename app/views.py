@@ -10,15 +10,13 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework import status
 from rest_framework.authtoken.models import Token
-from .models import (
-    User,
-    Story
-)
+import json
+from .models import User, Story
 from .serializers import (
     UserRegistrationSerializer,
     UserSignInSerializer,
     PromptSerializer,
-    StorySerializer
+    StorySerializer,
 )
 from django.conf import settings
 import google.generativeai as google_palm
@@ -27,6 +25,7 @@ from .serializers import UserSerializer
 from rest_framework.permissions import IsAuthenticated
 import spacy
 from sklearn.metrics.pairwise import cosine_similarity
+from requests.exceptions import RequestException
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -40,9 +39,8 @@ def register(request):
         user = User.objects.create_user(
             username=username, email=email, password=password
         )
-        user.is_active = False 
+        user.is_active = False
         user.save()
-
 
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         token = default_token_generator.make_token(user)
@@ -53,7 +51,7 @@ def register(request):
 
         subject = "Activate Your Account"
         message = f"Hello {user.username},\n\nPlease click the link below to activate your account:\n\n{activation_url}\n\nIf you didn't request this activation, please ignore this email."
-        from_email = settings.EMAIL_HOST_USER 
+        from_email = settings.EMAIL_HOST_USER
         recipient_list = [user.email]
 
         send_mail(subject, message, from_email, recipient_list)
@@ -103,7 +101,9 @@ def sign_in(request):
                 login(request, user)
                 token, _ = Token.objects.get_or_create(user=user)
                 csrf_token = get_token(request)
-                return Response({"token": token.key,"csrf":csrf_token}, status=status.HTTP_200_OK)
+                return Response(
+                    {"token": token.key, "csrf": csrf_token}, status=status.HTTP_200_OK
+                )
             else:
                 return Response(
                     {"error": "Account is not activated."},
@@ -116,7 +116,9 @@ def sign_in(request):
             )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 nlp = spacy.load("en_core_web_md")
+
 
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
@@ -137,7 +139,11 @@ def SearchAPIView(request):
 
             threshold = 0.9
             print(similarities)
-            similar_prompts = [prompt for prompt, similarity in zip(prompts, similarities) if similarity > threshold]
+            similar_prompts = [
+                prompt
+                for prompt, similarity in zip(prompts, similarities)
+                if similarity > threshold
+            ]
 
             if similar_prompts:
                 results = Story.objects.filter(prompt__in=similar_prompts)
@@ -150,16 +156,16 @@ def SearchAPIView(request):
         except User.DoesNotExist:
             return Response(
                 {"detail": "User is not logged in."},
-                status=status.HTTP_401_UNAUTHORIZED
+                status=status.HTTP_401_UNAUTHORIZED,
             )
         except Exception as e:
             return Response(
-                {"detail": "An error occurred.","error":str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {"detail": "An error occurred.", "error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def GenerateStoryView(request):
@@ -167,12 +173,14 @@ def GenerateStoryView(request):
     print(request.data)
     if serializer.is_valid():
         try:
-            generated_story_response = generate_story(request, serializer.validated_data["prompt"])
+            generated_story_response = generate_story(
+                request, serializer.validated_data["prompt"]
+            )
             return generated_story_response
         except User.DoesNotExist:
             return Response(
                 {"detail": "User is not logged in."},
-                status=status.HTTP_401_UNAUTHORIZED
+                status=status.HTTP_401_UNAUTHORIZED,
             )
         except Exception as e:
             return Response(
@@ -180,60 +188,69 @@ def GenerateStoryView(request):
             )
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
 @api_view(["GET"])
-@permission_classes([IsAuthenticated]) 
+@permission_classes([IsAuthenticated])
 def CurrentUserDetailView(request):
     try:
         serializer = UserSerializer(request.user)
         return Response(serializer.data, status=status.HTTP_200_OK)
     except User.DoesNotExist:
         return Response(
-            {"detail": "User is not logged in."},
-            status=status.HTTP_401_UNAUTHORIZED
+            {"detail": "User is not logged in."}, status=status.HTTP_401_UNAUTHORIZED
         )
     except Exception as e:
         return Response(
             {"detail": "An error occurred."},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
         )
-    
-def generate_story(request, prompt_text):
-    try:
-        google_palm.configure(api_key=settings.GOOGLE_API_KEY)
-        prompt = "generate a story based on indian ancient text on context " + prompt_text
-        defaults = {
-            "model": "models/text-bison-001",
-            "temperature": 0.7,
-            "candidate_count": 1,
-            "top_k": 40,
-            "top_p": 0.95,
-            "max_output_tokens": 1024,
-            "stop_sequences": [],
-            "safety_settings": [
-                {"category": "HARM_CATEGORY_DEROGATORY", "threshold": 1},
-                {"category": "HARM_CATEGORY_TOXICITY", "threshold": 1},
-                {"category": "HARM_CATEGORY_VIOLENCE", "threshold": 2},
-                {"category": "HARM_CATEGORY_SEXUAL", "threshold": 2},
-                {"category": "HARM_CATEGORY_MEDICAL", "threshold": 2},
-                {"category": "HARM_CATEGORY_DANGEROUS", "threshold": 2},
-            ],
-        }
 
-        response = google_palm.generate_text(**defaults, prompt=prompt)
-        generated_story = response.result
-        title_prompt="Generate title of the give story "+generated_story
-        title=google_palm.generate_text(**defaults, prompt=title_prompt)
-        title.result=(title.result).replace('**','')
-        new_story = Story(prompt=prompt_text, title=title.result, story=generated_story, user=request.user)
-        new_story.publish()
-        return Response({"story": generated_story,"title":title.result}, status=status.HTTP_200_OK)
-    
-    except Exception as e:
+
+def generate_story(request, prompt_text, max_attempts=3):
+    attempts = 0
+
+    while attempts < max_attempts:
+        try:
+            google_palm.configure(api_key=settings.GOOGLE_API_KEY)
+            prompt = "Craft an engaging narrative based on the ancient Indian epic, {prompt_text}. Create the story in well structured JSON format, including a title, story, and book_reference. The story should be extensive, spanning over 900 words, and organized into three well-structured paragraphs. Explore themes such as Good habits, discipline life and dharma. Feel free to incorporate specific details and emotions to bring the story to life."
+            defaults = {
+                "model": "models/text-bison-001",
+                "temperature": 0.7,
+                "candidate_count": 1,
+                "top_k": 40,
+                "top_p": 0.95,
+                "max_output_tokens": 2048,
+                "stop_sequences": [],
+                "safety_settings": [
+                    {"category": "HARM_CATEGORY_DEROGATORY", "threshold": 1},
+                    {"category": "HARM_CATEGORY_TOXICITY", "threshold": 1},
+                    {"category": "HARM_CATEGORY_VIOLENCE", "threshold": 2},
+                    {"category": "HARM_CATEGORY_SEXUAL", "threshold": 2},
+                    {"category": "HARM_CATEGORY_MEDICAL", "threshold": 2},
+                    {"category": "HARM_CATEGORY_DANGEROUS", "threshold": 2},
+                ],
+            }
+
+            response = google_palm.generate_text(**defaults, prompt=prompt)
+            generated_story = response.result
+            data = json.loads(response.result[7:-3].replace("\n", " "))
+            new_story = Story(prompt=prompt_text, title=data['title'], story=data["story"], reference_book=data["book_reference"], user=request.user)
+            new_story.publish()
             return Response(
-                {"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {
+                    "story": data["story"],
+                    "title": data["title"],
+                    "book_reference": data["book_reference"],
+                },
+                status=status.HTTP_200_OK,
             )
-    
-@api_view(['PUT']) 
+
+        except (RequestException, Exception) as e:
+            attempts += 1
+
+    return Response({"error": f"Failed after {max_attempts} attempts. Error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+@api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def update_profile(request):
     user = request.user
@@ -242,3 +259,10 @@ def update_profile(request):
         serializer.save()
         return Response(serializer.data, status=200)
     return Response(serializer.errors, status=400)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_story(request):
+    story = Story.objects.order_by('-creation_date')[:50]
+    serializer = StorySerializer(story, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
