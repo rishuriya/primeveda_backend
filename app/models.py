@@ -6,6 +6,7 @@ from django.utils.translation import gettext_lazy as _
 class User(AbstractUser):
     mobile = models.BigIntegerField(_('Mobile'), blank=True, null=True)
     stories = models.ManyToManyField('Story', related_name='users', blank=True)
+    last_reading = models.ForeignKey('Story', related_name='last_read_by', blank=True, null=True, on_delete=models.SET_NULL)
 
     def __str__(self):
         return self.username

@@ -236,6 +236,7 @@ def generate_story(request, prompt_text, max_attempts=3):
             data = json.loads(response.result[7:-3].replace("\n", " "))
             new_story = Story(prompt=prompt_text, title=data['title'], story=data["story"], reference_book=data["book_reference"], user=request.user)
             new_story.publish()
+            request.user.stories.add(new_story)
             return Response(
                 {
                     "story": data["story"],
@@ -265,4 +266,25 @@ def update_profile(request):
 def get_story(request):
     story = Story.objects.order_by('-creation_date')[:50]
     serializer = StorySerializer(story, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_story_by_id(request, id):
+    try:
+        story = Story.objects.get(id=id)
+    except Story.DoesNotExist:
+        return Response({"message": "Story does not exist"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        serializer = StorySerializer(story)
+    except Exception as e:
+        return Response({"message": "Error occurred during serialization", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    try:
+        request.user.last_reading = story
+        request.user.save()
+    except Exception as e:
+        return Response({"message": "Error occurred while updating user's last reading", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
     return Response(serializer.data, status=status.HTTP_200_OK)
