@@ -288,3 +288,14 @@ def get_story_by_id(request, id):
         return Response({"message": "Error occurred while updating user's last reading", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_last_reading(request):
+    user = request.user
+    last_reading = user.last_reading
+    if last_reading:
+        serializer = StorySerializer(last_reading)
+        return Response(serializer.data, status= status.HTTP_200_OK)
+    else:
+        return Response("User has no last reading", status=status.HTTP_404_NOT_FOUND)
