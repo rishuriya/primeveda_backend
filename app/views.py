@@ -212,7 +212,7 @@ def generate_story(request, prompt_text, max_attempts=3):
     while attempts < max_attempts:
         try:
             google_palm.configure(api_key=settings.GOOGLE_API_KEY)
-            prompt = "Craft an engaging narrative based on the ancient Indian epic, {prompt_text}. Create the story in well structured JSON format, including a title, story, and book_reference. The story should be extensive, spanning over 900 words, and organized into three well-structured paragraphs. Explore themes such as Good habits, discipline life and dharma. Feel free to incorporate specific details and emotions to bring the story to life."
+            prompt = "Craft an engaging narrative based on the ancient Indian epic, {prompt_text}. Create the story in well structured JSON format, including a title, story, and book_reference. The story should be extensive, spanning over 900 words, and organized into three well-structured paragraphs. Explore themes such as Good habits, discipline life, and various other life lessons. Feel free to incorporate specific details and emotions to bring the story to life."
             defaults = {
                 "model": "models/text-bison-001",
                 "temperature": 0.7,
