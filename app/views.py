@@ -26,6 +26,9 @@ from rest_framework.permissions import IsAuthenticated
 import spacy
 from sklearn.metrics.pairwise import cosine_similarity
 from requests.exceptions import RequestException
+import base64
+import os
+import requests
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
@@ -232,10 +235,13 @@ def generate_story(request, prompt_text, max_attempts=3):
             }
 
             response = google_palm.generate_text(**defaults, prompt=prompt)
-            generated_story = response.result
             data = json.loads(response.result[7:-3].replace("\n", " "))
             new_story = Story(prompt=prompt_text, title=data['title'], story=data["story"], reference_book=data["book_reference"], user=request.user)
             new_story.publish()
+        
+            image=generate_image(new_story.id, prompt, new_story.story, new_story.title, new_story.reference_book)
+            new_story.image_url=image.data
+            new_story.save()
             request.user.stories.add(new_story)
             return Response(
                 {
@@ -248,8 +254,9 @@ def generate_story(request, prompt_text, max_attempts=3):
 
         except (RequestException, Exception) as e:
             attempts += 1
+            print(e)
 
-    return Response({"error": f"Failed after {max_attempts} attempts. Error: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    return Response({"error": f"Failed after {max_attempts} attempts."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(["PUT"])
 @permission_classes([IsAuthenticated])
@@ -299,3 +306,60 @@ def get_last_reading(request):
         return Response(serializer.data, status= status.HTTP_200_OK)
     else:
         return Response("User has no last reading", status=status.HTTP_404_NOT_FOUND)
+
+
+def generate_image(id, prompt, story, title, ref):
+    body = {
+    "samples": 1,
+    "height": 1024,
+    "width": 1024,
+    "steps": 40,
+    "cfg_scale": 5,
+    "text_prompts": [
+        # {
+        # "text": story,
+        # "weight": 0.6
+        # },
+        {
+        "text": title,
+        "weight": 0.5
+        },
+        {
+        "text": prompt,
+        "weight": 0.8
+        },
+        {
+        "text": ref,
+        "weight": 1
+        }
+    ],
+    }
+
+    res = requests.post(
+    "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
+    headers={
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": settings.STABILITY_API_KEY,
+    },
+    json=body,
+    )
+
+    if res.status_code != 200:
+        raise Exception("Non-200 response: " + str(res.text))
+
+    data = res.json()
+
+    folder_path = "../generated_images"
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+ 
+    for i, image in enumerate(data["artifacts"]):
+        file_path = os.path.join(folder_path, f'{id}.png')
+        with open(file_path, "wb") as f:
+            f.write(base64.b64decode(image["base64"]))
+
+        # Save the image URL to the model
+        image_url = os.path.join(settings.MEDIA_URL, file_path)
+
+    return Response(data=image_url, status= status.HTTP_201_CREATED)

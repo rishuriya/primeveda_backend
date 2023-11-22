@@ -4,3 +4,6 @@ google-generativeai
 spacy
 scikit-learn
 django-cors-headers 
+channels
+daphne
+channels_redis
