@@ -363,3 +363,35 @@ def generate_image(id, prompt, story, title, ref):
         image_url = os.path.join(settings.MEDIA_URL, file_path)
 
     return Response(data=image_url, status= status.HTTP_201_CREATED)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def add_favorite(request, id):
+    try:
+        story = Story.objects.get(id=id)
+    except Story.DoesNotExist:
+        return Response({"message": "Story does not exist"}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        request.user.favorites.add(story)
+        request.user.save()
+    except Exception as e:
+        return Response({"message": "Error occurred while adding story to favorites", "details": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    return Response({"message": "Story added to favorites"}, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_favorite(request):
+    user = request.user
+    favorites = user.favorites.all()
+    serializer = StorySerializer(favorites, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_collection(request):
+    user = request.user
+    collection = user.stories.all()
+    serializer = StorySerializer(collection, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)

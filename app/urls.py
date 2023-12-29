@@ -14,6 +14,9 @@ urlpatterns = [
     path('update-profile/', views.update_profile, name='update-profile'),
     path('getStory/', views.get_story, name='Get_top_fifty'),
     path('getStory/<int:id>/', views.get_story_by_id, name='Get_story_by_id'),
-    path('user/last_reading/', views.get_last_reading, name='Get_user_last_story')
+    path('user/last_reading/', views.get_last_reading, name='Get_user_last_story'),
+    path('user/add_favorite/<int:id>', views.add_favorite, name='Add_user_favorite_story'),
+    path('user/favorite/', views.get_favorite, name='Get_user_favorite_story'),
+    path('user/collection/', views.get_collection, name='Get_user_collection_story')
 ]
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

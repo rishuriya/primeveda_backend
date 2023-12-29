@@ -7,6 +7,7 @@ class User(AbstractUser):
     mobile = models.BigIntegerField(_('Mobile'), blank=True, null=True)
     stories = models.ManyToManyField('Story', related_name='users', blank=True)
     last_reading = models.ForeignKey('Story', related_name='last_read_by', blank=True, null=True, on_delete=models.SET_NULL)
+    favorites = models.ManyToManyField('Story', related_name='users_favorites', blank=True)
 
     def __str__(self):
         return self.username
@@ -28,4 +29,14 @@ class Story(models.Model):
 
     def __str__(self):
         return self.title
+    
+class Favorite(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    story = models.ManyToManyField(Story, related_name='favorites', blank=True)
+    creation_date = models.DateTimeField(blank=True, null=True)
+    def publish(self):
+        self.creation_date = timezone.now()
+        self.save()
+
+    
     
