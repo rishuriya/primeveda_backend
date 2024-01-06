@@ -3,3 +3,6 @@
 /db.sqlite3
 /venv
 /app/migrations
+/ssr
+/app/__pycache__
+/primeveda_backend/__pycache__
