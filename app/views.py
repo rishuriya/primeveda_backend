@@ -154,8 +154,12 @@ def SearchAPIView(request):
                 serializer = StorySerializer(results, many=True)
                 return Response(serializer.data, status=status.HTTP_200_OK)
 
-            generated_story_response = generate_story(request, search_query)
-            return generated_story_response
+            return Response(
+                {
+                    "detail":"Story not Found.",
+                },
+                status=status.HTTP_204_NO_CONTENT
+            )
 
         except User.DoesNotExist:
             return Response(
