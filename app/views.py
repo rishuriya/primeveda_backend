@@ -247,6 +247,7 @@ def generate_story(request, prompt_text, max_attempts=3):
 
             def extract_title_and_story(input_string):
                 try: 
+                    print(input_string)
                     elements = [elem.strip() for elem in input_string.split(',')]
 
                     title = elements[0].split(':')[1].strip()
@@ -280,6 +281,7 @@ def generate_story(request, prompt_text, max_attempts=3):
                     "story": data["story"],
                     "title": data["title"],
                     "book_reference": data["book_reference"],
+                    "image_url": image_url,
                 },
                 status=status.HTTP_200_OK,
             )
@@ -337,7 +339,7 @@ def get_last_reading(request):
         serializer = StorySerializer(last_reading)
         return Response(serializer.data, status= status.HTTP_200_OK)
     else:
-        return Response("User has no last reading", status=status.HTTP_404_NOT_FOUND)
+        return Response("User has no last reading", status=status.HTTP_204_NO_CONTENT)
 
 
 def generate_image(id, prompt, story, title, ref):
@@ -384,7 +386,7 @@ def generate_image(id, prompt, story, title, ref):
 
     data = res.json()
 
-    folder_path = "generated_images"
+    folder_path = "media/generated_images"
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
  
@@ -397,7 +399,7 @@ def generate_image(id, prompt, story, title, ref):
             f.write(base64.b64decode(image["base64"]))
 
         
-        image_urls.append(os.path.join(settings.MEDIA_URL, file_path))
+        image_urls.append(file_path)
 
     return Response(data=image_urls, status= status.HTTP_201_CREATED)
 
