@@ -434,3 +434,8 @@ def get_collection(request):
     collection = user.stories.all()
     serializer = StorySerializer(collection, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def health_check(request):
+    return Response({"message": "Server is up and running"}, status=status.HTTP_200_OK)
