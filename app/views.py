@@ -224,7 +224,7 @@ def generate_story(request, prompt_text, max_attempts=3):
         try:
             google_palm.configure(api_key=settings.GOOGLE_API_KEY)
             prompt = """Craft an engaging narrative based on the ancient Indian epic. The story should be based on solving the problem. Create the story including a title, story, and book_reference. The story should be extensive, spanning over 900 words, and organized into three well-structured paragraphs. Explore themes such as Good habits, discipline life, and various other life lessons. Feel free to incorporate specific details and emotions to bring the story to life.\n
-                Example Response format->  title: The title, book_reference: The Mahabharat, story: A good story spanning over 900 words …\n
+                Example Response format->  title: The title, book_reference: The Book, story: A good story spanning over 900 words …\n
                 Strictly follow the above format for response. Do not give any other information in the response. \n
                 Problem:"""
             defaults = {
@@ -246,27 +246,40 @@ def generate_story(request, prompt_text, max_attempts=3):
             }
 
             def extract_title_and_story(input_string):
-                try: 
-                    print(input_string)
-                    elements = [elem.strip() for elem in input_string.split(',')]
+                limiters=[]
+                title_types=['Title:','title:','Title :','title :']
+                book_types=['Book Reference:','book reference:','Book Reference :','book reference :','book_reference:','book_reference :']
+                story_types=['Story:','story:','Story :','story :']
 
-                    title = elements[0].split(':')[1].strip()
-                    book= elements[1].split(':')[1].strip()
-                    story = ' '.join(elements[2:]).strip()
-                    result = {"title": title, "story": story, "book_reference": book}
-                    json_result = json.dumps(result, indent=2)
-                    with open("data.json", "w") as outfile:
-                        json.dump(response, outfile)
-                except Exception as e:
-                    print("error: ",e)
-                    # exit(1)
-                return json_result
-            
+                for title_type in title_types:
+                    if title_type in input_string:
+                        limiters.append(title_type)
+                        break
+                for book_type in book_types:
+                    if book_type in input_string:
+                        limiters.append(book_type)
+                        break
+                for story_type in story_types:
+                    if story_type in input_string:
+                        limiters.append(story_type)
+                        break
+
+                json_output = {}
+                json_output["title"] = input_string.split(limiters[0])[1].split(limiters[1])[0].strip()
+                json_output["book_reference"] = input_string.split(limiters[1])[1].split(limiters[2])[0].strip()
+                json_output["story"] = input_string.split(limiters[2])[1].strip()
+
+                return str(json.dumps(json_output))
+    
             response = google_palm.generate_text(**defaults, prompt=prompt+prompt_text)
             response = extract_title_and_story(response.result)
+
+            print("--")
             print(response)
+            print("--")
 
             data = json.loads(response)
+
             new_story = Story(prompt=prompt_text, title=data['title'], story=data["story"], reference_book=data["book_reference"], user=request.user)
             new_story.publish()
 
@@ -350,6 +363,7 @@ def generate_image(id, prompt, story, title, ref):
     "width": 1024,
     "steps": 40,
     "cfg_scale": 5,
+    "style_preset": "fantasy-art",
     "text_prompts": [
         # {
         # "text": story,
@@ -357,7 +371,7 @@ def generate_image(id, prompt, story, title, ref):
         # },
         {
         # "text": title,
-        "text": f"Generate an image based on Hindu culture on the story {title} derived from the book {ref}.",
+        "text": f"Generate an image based on {title} derived from the book {ref}.",
         "weight": 1
         },
         {
@@ -369,6 +383,7 @@ def generate_image(id, prompt, story, title, ref):
         # "weight": 1
         # }
     ],
+    "self_attention" :"yes"
     }
 
     res = requests.post(
@@ -386,7 +401,7 @@ def generate_image(id, prompt, story, title, ref):
 
     data = res.json()
 
-    folder_path = "media/generated_images"
+    folder_path = "primeveda_backend/media/generated"
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
  
@@ -394,8 +409,8 @@ def generate_image(id, prompt, story, title, ref):
     for i, image in enumerate(data["artifacts"]):
         print("-")
         print("Saving image " + str(i))
-        file_path = os.path.join(folder_path, f'{id}_{i}.png')
-        with open(file_path, "wb") as f:
+        file_path = os.path.join("media/generated", f'{id}_{i}.png')
+        with open(os.path.join("primeveda_backend/media/generated",f'{id}_{i}.png', "wb")) as f:
             f.write(base64.b64decode(image["base64"]))
 
         
