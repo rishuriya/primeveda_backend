@@ -51,7 +51,7 @@ def register(request):
         activation_link = reverse(
             "activate_account", kwargs={"uidb64": uid, "token": token}
         )
-        activation_url = f"http://{get_current_site(request).domain}{activation_link}"
+        activation_url = f"https://{get_current_site(request).domain}{activation_link}"
 
         subject = "Activate Your Account"
         message = f"Hello {user.username},\n\nPlease click the link below to activate your account:\n\n{activation_url}\n\nIf you didn't request this activation, please ignore this email."
