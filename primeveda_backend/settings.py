@@ -41,6 +41,7 @@ STABILITY_API_KEY = config('STABILITY_API_KEY')
 # Application definition
 
 INSTALLED_APPS = [
+    'clearcache',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',

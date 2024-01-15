@@ -8,3 +8,4 @@ channels
 daphne
 channels_redis
 whitenoise
+django-clearcache 
