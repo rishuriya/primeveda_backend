@@ -410,7 +410,7 @@ def generate_image(id, prompt, story, title, ref):
         print("-")
         print("Saving image " + str(i))
         file_path = os.path.join("media/generated", f'{id}_{i}.png')
-        with open(os.path.join("primeveda_backend/media/generated",f'{id}_{i}.png', "wb")) as f:
+        with open(os.path.join("primeveda_backend/media/generated",f'{id}_{i}.png'), "wb") as f:
             f.write(base64.b64decode(image["base64"]))
 
         

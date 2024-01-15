@@ -21,7 +21,7 @@ class Story(models.Model):
     creation_date = models.DateTimeField(blank=True, null=True)
     image_url = models.CharField(max_length=400, null= True)
     reference_book = models.CharField(max_length=200, null= True)
-    # moderation = models.BooleanField(default=True)
+    moderation = models.BooleanField(default=True)
     user=models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
 
     def publish(self):
